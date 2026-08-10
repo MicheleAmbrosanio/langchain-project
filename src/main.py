@@ -8,19 +8,32 @@ class State(TypedDict):
 
 
 def greet(state: State) -> State:
-    return {"message": f"Ciao! Hai detto: {state['message']}"}
+    return {
+        "message": f"Ciao! Hai detto: {state['message']}"
+    }
+
+
+def uppercase(state: State) -> State:
+    return {
+        "message": state["message"].upper()
+    }
 
 
 builder = StateGraph(State)
 
 builder.add_node("greet", greet)
+builder.add_node("uppercase", uppercase)
 
 builder.add_edge(START, "greet")
-builder.add_edge("greet", END)
+builder.add_edge("greet", "uppercase")
+builder.add_edge("uppercase", END)
 
 graph = builder.compile()
 
 
 if __name__ == "__main__":
-    result = graph.invoke({"message": "sto imparando LangGraph"})
+    result = graph.invoke(
+        {"message": "sto imparando LangGraph"}
+    )
+
     print(result)
