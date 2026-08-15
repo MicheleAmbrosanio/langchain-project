@@ -1,105 +1,101 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
-from pydantic import BaseModel, Field, ValidationError
-from typing import Annotated
+from pydantic import BaseModel
 
-NonVuota = Annotated[str, Field(min_length=1)]
+# ============================================================
+# 1. DOCUMENTI
+# ============================================================
 
-class Formazione(BaseModel):
-    portiere: list[NonVuota] = Field(
-        min_length=1,
-        max_length=1,
-        description="Nome della persona che giocherà in porta"
-    )
-
-    difensori: list[NonVuota] = Field(
-        min_length=4,
-        max_length=4,
-        description="Nome delle persone che giocheranno in difesa"
-    )
-
-    centrocampisti: list[NonVuota] = Field(
-        min_length=3,
-        max_length=3,
-        description="Nome delle persone che giocheranno a centrocampo"
-    )
-
-    attaccanti: list[NonVuota] = Field(
-        min_length=3,
-        max_length=3,
-        description="Nome delle persone che giocheranno in attacco"
-    )
-
-giocatori_validi = [
-    "Gianluigi Donnarumma",
-    "William Saliba",
-    "Achraf Hakimi",
-    "Theo Hernández",
-    "Virgil van Dijk",
-    "Rodri",
-    "Jude Bellingham",
-    "Pedri",
-    "Vinícius Júnior",
-    "Erling Haaland",
-    "Bukayo Saka"
+documenti = [
+    "Michele ha 30 anni ed è un programmatore.",
+    "Michele vive a Napoli.",
+    "Nel tempo libero Michele studia intelligenza artificiale.",
+    "Michele possiede una bicicletta rossa.",
 ]
 
-prompt = ChatPromptTemplate.from_template(
-    """Classifica i giocatori della formazione.
+# ============================================================
+# 2. RETRIEVER SEMPLIFICATO
+# ============================================================
 
-MAPPATURA OBBLIGATORIA:
-portiere:
-difensori:
-centrocampisti:
-attaccanti:
+def cerca_documenti(domanda):
+    risultati = []
 
-Testo da classificare:
-{testo}
-"""
-)
+    parole_chiave = ["vive", "città"]
+
+    for documento in documenti:
+        if any(parola in documento.lower() for parola in parole_chiave):
+            risultati.append(documento)
+
+    return risultati
+
+# ============================================================
+# 3. DOMANDA
+# ============================================================
+
+domanda = "Dove vive Michele?"
+
+# ============================================================
+# 4. RECUPERO DEI DOCUMENTI
+# ============================================================
+
+risultati = cerca_documenti(domanda)
+
+print("=== DOCUMENTI TROVATI ===")
+
+for documento in risultati:
+    print("-", documento)
+
+# ============================================================
+# 5. CREAZIONE DEL CONTESTO
+# ============================================================
+
+contesto = "\n".join(risultati)
+
+print("\n=== CONTESTO ===")
+print(contesto)
+
+# ============================================================
+# 6. MODELLO
+# ============================================================
 
 model = ChatOllama(model="qwen2.5:3b")
 
-structured_model = model.with_structured_output(Formazione)
+# ============================================================
+# 7. PROMPT PER LA RISPOSTA
+# ============================================================
 
-chain = prompt | structured_model
+prompt_risposta = ChatPromptTemplate.from_template(
+    """Rispondi alla domanda usando esclusivamente il contesto fornito.
 
-try:
-    response = chain.invoke({
-       "testo": "La formazione è composta da Gianluigi Donnarumma in porta. In difesa giocano William Saliba, Achraf Hakimi, Theo Hernández e Virgil van Dijk. A centrocampo ci sono Rodri, Jude Bellingham e Pedri. In attacco giocano Vinícius Júnior, Erling Haaland e Bukayo Saka."
-    })
+CONTESTO:
+{contesto}
 
-    tutti_i_giocatori = (
-    response.portiere
-    + response.difensori
-    + response.centrocampisti
-    + response.attaccanti
-    )
+DOMANDA:
+{domanda}
 
-    for giocatore in tutti_i_giocatori:
-        if giocatore not in giocatori_validi:
-            raise ValueError(
-                f"Giocatore non presente nella formazione: {giocatore}"
-            )
+Se la risposta non è presente nel contesto, rispondi:
+"Informazione non presente nel contesto."
+"""
+)
 
-    if len(tutti_i_giocatori) != len(set(tutti_i_giocatori)):
-        raise ValueError(
-            "Un giocatore è stato assegnato a più ruoli."
-        )
+# ============================================================
+# 8. CHAIN
+# ============================================================
 
-    giocatori_mancanti = set(giocatori_validi) - set(tutti_i_giocatori)
+risposta_chain = prompt_risposta | model
 
-    if giocatori_mancanti:
-        raise ValueError(
-            f"Giocatori mancanti nella formazione: {giocatori_mancanti}"
-        )
+# ============================================================
+# 9. INVOCazione DELLA CHAIN
+# ============================================================
 
-    print(response)
+risposta = risposta_chain.invoke({
+    "contesto": contesto,
+    "domanda": domanda
+})
 
-except ValidationError as e:
-    print("ERRORE DI VALIDAZIONE:")
-    print(e)
+# ============================================================
+# 10. RISULTATO
+# ============================================================
 
-except ValueError as e:
-    print("ERRORE DATI:")
-    print(e)
+print("\n=== RISPOSTA ===")
+print(risposta.content)
